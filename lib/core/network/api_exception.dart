@@ -45,43 +45,43 @@ class ApiException implements Exception {
       (type == ApiErrorType.unauthorized && (code == 'NO_TOKEN' || code == 'INVALID_TOKEN'));
 
   factory ApiException.fromDio(DioException e) {
-    switch (e.type) {
-      case DioExceptionType.connectionTimeout:
-      case DioExceptionType.sendTimeout:
-      case DioExceptionType.receiveTimeout:
-        return const ApiException(
-          type: ApiErrorType.timeout,
-          message: 'The server is taking too long to respond. Please try again.',
-        );
-      case DioExceptionType.connectionError:
-        return const ApiException(
-          type: ApiErrorType.network,
-          message: 'No internet connection. Please check your network and try again.',
-        );
-      case DioExceptionType.badCertificate:
-        return const ApiException(
-          type: ApiErrorType.network,
-          message: 'Could not make a secure connection to the server.',
-        );
-      case DioExceptionType.cancel:
-        return const ApiException(
-          type: ApiErrorType.unknown,
-          message: 'The request was cancelled.',
-        );
-      case DioExceptionType.badResponse:
-        return _fromResponse(e.response);
-      case DioExceptionType.unknown:
-        if (e.error is SocketException) {
-          return const ApiException(
-            type: ApiErrorType.network,
-            message: 'No internet connection. Please check your network and try again.',
-          );
-        }
-        return const ApiException(
-          type: ApiErrorType.unknown,
-          message: 'Something went wrong. Please try again.',
-        );
+    // Plain if-checks instead of a switch over every DioExceptionType: newer Dio versions
+    // add values (e.g. transformTimeout), and an exhaustive switch would stop compiling.
+    final type = e.type;
+
+    if (type == DioExceptionType.connectionTimeout ||
+        type == DioExceptionType.sendTimeout ||
+        type == DioExceptionType.receiveTimeout) {
+      return const ApiException(
+        type: ApiErrorType.timeout,
+        message: 'The server is taking too long to respond. Please try again.',
+      );
     }
+    if (type == DioExceptionType.connectionError || e.error is SocketException) {
+      return const ApiException(
+        type: ApiErrorType.network,
+        message: 'No internet connection. Please check your network and try again.',
+      );
+    }
+    if (type == DioExceptionType.badCertificate) {
+      return const ApiException(
+        type: ApiErrorType.network,
+        message: 'Could not make a secure connection to the server.',
+      );
+    }
+    if (type == DioExceptionType.badResponse) {
+      return _fromResponse(e.response);
+    }
+    if (type == DioExceptionType.cancel) {
+      return const ApiException(
+        type: ApiErrorType.unknown,
+        message: 'The request was cancelled.',
+      );
+    }
+    return const ApiException(
+      type: ApiErrorType.unknown,
+      message: 'Something went wrong. Please try again.',
+    );
   }
 
   static ApiException _fromResponse(Response<dynamic>? response) {
