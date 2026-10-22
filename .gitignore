@@ -1,0 +1,27 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+pubspec.lock
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Android
+android/.gradle/
+android/local.properties
+android/app/debug
+android/app/profile
+android/app/release
+
+# Release signing: NEVER commit these
+android/key.properties
+*.jks
+*.keystore
+
+# Secrets
+.env

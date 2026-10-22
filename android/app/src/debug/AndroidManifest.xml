@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Debug builds only (release builds are not affected by this file):
+         INTERNET for the Flutter tooling, and plain-http access so the app can talk to a
+         backend running on your own computer, e.g. http://192.168.1.5:3000 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <application android:usesCleartextTraffic="true"/>
+</manifest>
