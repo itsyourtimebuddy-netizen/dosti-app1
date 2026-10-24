@@ -2,7 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/auth/auth_flow.dart';
 import '../../features/auth/login_screen.dart';
+import '../../features/auth/otp_screen.dart';
+import '../../features/auth/profile_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/splash/splash_screen.dart';
 import '../session/session_controller.dart';
@@ -12,10 +15,12 @@ class AppRoutes {
 
   static const splash = '/splash';
   static const login = '/login';
+  static const otp = '/otp';
+  static const profile = '/profile';
   static const home = '/home';
 
-  /// Screens a logged-out user may open. Later steps add the OTP and sign-up screens here.
-  static const publicRoutes = <String>{login};
+  /// Screens a logged-out user may open.
+  static const publicRoutes = <String>{login, otp, profile};
 }
 
 /// Tells the router to re-run its redirect whenever the login state changes.
@@ -41,7 +46,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           // Still reading the saved token: stay on the splash screen.
           return location == AppRoutes.splash ? null : AppRoutes.splash;
         case SessionStatus.unauthenticated:
-          return isPublic ? null : AppRoutes.login;
+          if (!isPublic) return AppRoutes.login;
+          // The code and profile screens only make sense in the middle of a login attempt
+          // (e.g. not after the app was restarted on them).
+          final flow = ref.read(authFlowProvider);
+          if (location == AppRoutes.otp && flow.phone == null) return AppRoutes.login;
+          if (location == AppRoutes.profile) {
+            if (flow.phone == null) return AppRoutes.login;
+            if (flow.otp == null) return AppRoutes.otp;
+          }
+          return null;
         case SessionStatus.authenticated:
           return (location == AppRoutes.splash || isPublic) ? AppRoutes.home : null;
       }
@@ -49,6 +63,8 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: AppRoutes.splash, builder: (_, __) => const SplashScreen()),
       GoRoute(path: AppRoutes.login, builder: (_, __) => const LoginScreen()),
+      GoRoute(path: AppRoutes.otp, builder: (_, __) => const OtpScreen()),
+      GoRoute(path: AppRoutes.profile, builder: (_, __) => const ProfileScreen()),
       GoRoute(path: AppRoutes.home, builder: (_, __) => const HomeScreen()),
     ],
   );
