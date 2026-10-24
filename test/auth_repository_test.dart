@@ -7,7 +7,7 @@ import 'package:dosti_app/features/auth/auth_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Answers every request with a canned response and remembers what was sent.
-class _Canned extends HttpClientAdapter {
+class _Canned implements HttpClientAdapter {
   _Canned(this.status, this.body);
   final int status;
   final String body;
