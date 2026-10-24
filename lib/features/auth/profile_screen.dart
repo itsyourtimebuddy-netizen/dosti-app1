@@ -138,7 +138,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   key: const Key('gender_field'),
-                  value: _gender,
+                  initialValue: _gender,
                   decoration: const InputDecoration(
                     labelText: 'Gender',
                     border: OutlineInputBorder(),

@@ -9,6 +9,7 @@ import '../../core/network/api_exception.dart';
 import '../../core/router/app_router.dart';
 import '../../core/session/session_controller.dart';
 import 'auth_flow.dart';
+import 'auth_models.dart';
 import 'auth_repository.dart';
 import 'auth_validators.dart';
 
