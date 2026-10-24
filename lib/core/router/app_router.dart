@@ -7,6 +7,7 @@ import '../../features/auth/login_screen.dart';
 import '../../features/auth/otp_screen.dart';
 import '../../features/auth/profile_screen.dart';
 import '../../features/home/home_screen.dart';
+import '../../features/profile/edit_profile_screen.dart';
 import '../../features/splash/splash_screen.dart';
 import '../session/session_controller.dart';
 
@@ -18,6 +19,7 @@ class AppRoutes {
   static const otp = '/otp';
   static const profile = '/profile';
   static const home = '/home';
+  static const editProfile = '/edit-profile';
 
   /// Screens a logged-out user may open.
   static const publicRoutes = <String>{login, otp, profile};
@@ -66,6 +68,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.otp, builder: (_, __) => const OtpScreen()),
       GoRoute(path: AppRoutes.profile, builder: (_, __) => const ProfileScreen()),
       GoRoute(path: AppRoutes.home, builder: (_, __) => const HomeScreen()),
+      GoRoute(path: AppRoutes.editProfile, builder: (_, __) => const EditProfileScreen()),
     ],
   );
 

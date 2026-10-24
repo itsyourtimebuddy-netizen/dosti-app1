@@ -1,17 +1,16 @@
 import 'package:dosti_app/app.dart';
 import 'package:dosti_app/core/session/session_controller.dart';
-import 'package:dosti_app/core/storage/token_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'helpers/fakes.dart';
 
 /// Starts the real app with an in-memory token store instead of the phone's secure storage.
 Future<ProviderContainer> _pumpApp(WidgetTester tester, {String? savedToken}) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        tokenStoreProvider.overrideWithValue(InMemoryTokenStore(savedToken)),
-      ],
+      overrides: homeOverrides(savedToken: savedToken),
       child: const DostiApp(),
     ),
   );
@@ -38,7 +37,11 @@ void main() {
   testWidgets('logging out returns to login without a warning banner', (tester) async {
     await _pumpApp(tester, savedToken: 'saved.token');
 
+    await tester.tap(find.byKey(const Key('tab_profile')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('logout_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm_logout_button')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('login_screen')), findsOneWidget);

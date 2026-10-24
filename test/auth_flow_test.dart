@@ -1,11 +1,12 @@
 import 'package:dosti_app/app.dart';
 import 'package:dosti_app/core/network/api_exception.dart';
-import 'package:dosti_app/core/storage/token_store.dart';
 import 'package:dosti_app/features/auth/auth_models.dart';
 import 'package:dosti_app/features/auth/auth_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'helpers/fakes.dart';
 
 /// Scriptable stand-in for the backend. No timers: resendIn is 0.
 class FakeAuthRepository implements AuthRepository {
@@ -35,7 +36,7 @@ Future<void> _pump(WidgetTester tester, FakeAuthRepository repo) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
+        ...homeOverrides(),
         authRepositoryProvider.overrideWithValue(repo),
       ],
       child: const DostiApp(),

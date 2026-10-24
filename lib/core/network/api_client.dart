@@ -56,6 +56,10 @@ class ApiClient {
     return _send(() => dio.post<dynamic>(path, data: body));
   }
 
+  Future<Map<String, dynamic>> patchJson(String path, {Object? body}) {
+    return _send(() => dio.patch<dynamic>(path, data: body));
+  }
+
   Future<Map<String, dynamic>> _send(Future<Response<dynamic>> Function() request) async {
     try {
       final response = await request();
