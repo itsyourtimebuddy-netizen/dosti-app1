@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/session/session_controller.dart';
 
-/// Placeholder for step 1. Step 3 replaces this with the real home (tabs, coins, profile).
+/// Placeholder. Step 3 replaces this with the real home (tabs, coins, profile).
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 

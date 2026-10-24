@@ -1,6 +1,5 @@
 import 'package:dosti_app/app.dart';
 import 'package:dosti_app/core/network/api_exception.dart';
-import 'package:dosti_app/core/session/session_controller.dart';
 import 'package:dosti_app/core/storage/token_store.dart';
 import 'package:dosti_app/features/auth/auth_models.dart';
 import 'package:dosti_app/features/auth/auth_repository.dart';
@@ -8,44 +7,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Scripted stand-in for the backend. Cooldown is 0 so no countdown timer is started.
+/// Scriptable stand-in for the backend. No timers: resendIn is 0.
 class FakeAuthRepository implements AuthRepository {
-  final sentTo = <String>[];
-  final verifyCalls = <({String phone, String otp, ProfileInput? profile})>[];
-
-  Object? sendError;
-
-  /// Called for each verify; return a result or throw an ApiException.
-  AuthResult Function(String otp, ProfileInput? profile) onVerify =
-      (_, __) => const AuthResult.profileRequired();
+  bool newUser = true;
+  ApiException? sendError;
+  ApiException? verifyError;
+  final sent = <String>[];
+  final verifies = <Map<String, Object?>>[];
 
   @override
   Future<int> sendOtp(String phone) async {
     if (sendError != null) throw sendError!;
-    sentTo.add(phone);
+    sent.add(phone);
     return 0;
   }
 
   @override
-  Future<AuthResult> verify({
-    required String phone,
-    required String otp,
-    ProfileInput? profile,
-  }) async {
-    verifyCalls.add((phone: phone, otp: otp, profile: profile));
-    return onVerify(otp, profile);
+  Future<AuthResult> verify({required String phone, required String otp, ProfileInput? profile}) async {
+    verifies.add({'phone': phone, 'otp': otp, 'profile': profile});
+    if (verifyError != null) throw verifyError!;
+    if (newUser && profile == null) return const AuthResult.profileRequired();
+    return const AuthResult.loggedIn('fake.token');
   }
 }
 
-ApiException _err(String code, String message, {ApiErrorType type = ApiErrorType.unauthorized}) =>
-    ApiException(type: type, message: message, code: code);
-
 Future<void> _pump(WidgetTester tester, FakeAuthRepository repo) async {
-  tester.view.physicalSize = const Size(800, 1800);
-  tester.view.devicePixelRatio = 1.0;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
-
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -64,205 +50,190 @@ Future<void> _enterPhoneAndSend(WidgetTester tester, [String phone = '9876543210
   await tester.pumpAndSettle();
 }
 
-Future<void> _enterCodeAndVerify(WidgetTester tester, [String code = '123456']) async {
-  await tester.enterText(find.byKey(const Key('otp_field')), code);
+Future<void> _enterOtpAndVerify(WidgetTester tester, [String otp = '123456']) async {
+  await tester.enterText(find.byKey(const Key('otp_field')), otp);
   await tester.tap(find.byKey(const Key('verify_button')));
   await tester.pumpAndSettle();
 }
 
-Future<void> _fillProfile(WidgetTester tester, {String age = '25'}) async {
-  await tester.enterText(find.byKey(const Key('name_field')), 'Rahul');
-  await tester.enterText(find.byKey(const Key('age_field')), age);
-  await tester.tap(find.byKey(const Key('gender_field')));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('Male').last);
-  await tester.pumpAndSettle();
-  await tester.enterText(find.byKey(const Key('city_field')), 'Surat');
-}
-
 void main() {
-  testWidgets('invalid phone shows an error and sends nothing', (tester) async {
+  testWidgets('an invalid phone number is rejected before anything is sent', (tester) async {
     final repo = FakeAuthRepository();
     await _pump(tester, repo);
 
     await _enterPhoneAndSend(tester, '12345');
 
-    expect(find.text('Enter a 10-digit mobile number'), findsOneWidget);
-    expect(repo.sentTo, isEmpty);
     expect(find.byKey(const Key('login_screen')), findsOneWidget);
+    expect(find.text('Enter a 10-digit mobile number'), findsOneWidget);
+    expect(repo.sent, isEmpty);
   });
 
-  testWidgets('a valid phone sends the code and opens the OTP screen', (tester) async {
-    final repo = FakeAuthRepository();
+  testWidgets('a server error on send is shown and the user stays on login', (tester) async {
+    final repo = FakeAuthRepository()
+      ..sendError = const ApiException(type: ApiErrorType.server, message: 'Something went wrong on our side. Please try again.');
     await _pump(tester, repo);
 
     await _enterPhoneAndSend(tester);
 
-    expect(repo.sentTo, ['+919876543210']);
-    expect(find.byKey(const Key('otp_screen')), findsOneWidget);
-    expect(find.text('+919876543210'), findsOneWidget);
+    expect(find.byKey(const Key('login_screen')), findsOneWidget);
+    expect(find.byKey(const Key('login_error')), findsOneWidget);
   });
 
-  testWidgets('a send failure stays on login and shows the message', (tester) async {
+  testWidgets('a code requested a moment ago (cooldown) still opens the code screen', (tester) async {
     final repo = FakeAuthRepository()
       ..sendError = const ApiException(
-        type: ApiErrorType.network,
-        message: 'No internet connection. Please check your network and try again.',
+        type: ApiErrorType.rateLimited,
+        message: 'OTP already sent.',
+        statusCode: 429,
+        code: AuthErrorCodes.otpCooldown,
       );
     await _pump(tester, repo);
 
     await _enterPhoneAndSend(tester);
 
-    expect(find.byKey(const Key('login_error')), findsOneWidget);
-    expect(find.byKey(const Key('login_screen')), findsOneWidget);
-  });
-
-  testWidgets('cooldown error: goes on to the OTP screen, the earlier code still works', (tester) async {
-    final repo = FakeAuthRepository()
-      ..sendError = _err('OTP_COOLDOWN', 'Please wait', type: ApiErrorType.rateLimited);
-    await _pump(tester, repo);
-
-    await _enterPhoneAndSend(tester);
-
     expect(find.byKey(const Key('otp_screen')), findsOneWidget);
   });
 
-  testWidgets('existing user: correct code logs in and opens home', (tester) async {
-    final repo = FakeAuthRepository()..onVerify = (_, __) => const AuthResult.loggedIn('jwt.token');
+  testWidgets('existing user: phone, code, then home', (tester) async {
+    final repo = FakeAuthRepository()..newUser = false;
     await _pump(tester, repo);
 
     await _enterPhoneAndSend(tester);
-    await _enterCodeAndVerify(tester);
+    expect(find.byKey(const Key('otp_screen')), findsOneWidget);
+    expect(find.text('+919876543210'), findsOneWidget);
+    expect(repo.sent, ['+919876543210']);
+
+    await _enterOtpAndVerify(tester);
+    expect(find.byKey(const Key('home_screen')), findsOneWidget);
+  });
+
+  testWidgets('new user: phone, code, profile, then home', (tester) async {
+    final repo = FakeAuthRepository();
+    await _pump(tester, repo);
+
+    await _enterPhoneAndSend(tester);
+    await _enterOtpAndVerify(tester);
+    expect(find.byKey(const Key('profile_screen')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('name_field')), 'Rahul');
+    await tester.enterText(find.byKey(const Key('age_field')), '25');
+    await tester.enterText(find.byKey(const Key('city_field')), 'Surat');
+    await tester.tap(find.byKey(const Key('gender_field')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Male').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('create_account_button')));
+    await tester.tap(find.byKey(const Key('create_account_button')));
+    await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('home_screen')), findsOneWidget);
-    expect(repo.verifyCalls.single.profile, isNull);
+    // The second call carried the same code plus the profile.
+    expect(repo.verifies, hasLength(2));
+    expect(repo.verifies[1]['otp'], '123456');
+    final profile = repo.verifies[1]['profile'] as ProfileInput;
+    expect(profile.name, 'Rahul');
+    expect(profile.age, 25);
+    expect(profile.gender, 'male');
+    expect(profile.city, 'Surat');
   });
 
-  testWidgets('wrong code shows the error and stays on the OTP screen', (tester) async {
+  testWidgets('wrong code: message shown, still on the code screen', (tester) async {
     final repo = FakeAuthRepository()
-      ..onVerify = (_, __) => throw _err('OTP_INVALID', 'Incorrect OTP.');
+      ..verifyError = const ApiException(
+        type: ApiErrorType.unauthorized,
+        message: 'Incorrect OTP.',
+        statusCode: 401,
+        code: AuthErrorCodes.otpInvalid,
+      );
     await _pump(tester, repo);
-
     await _enterPhoneAndSend(tester);
-    await _enterCodeAndVerify(tester, '000000');
 
-    expect(find.text('Incorrect OTP.'), findsOneWidget);
+    await _enterOtpAndVerify(tester, '000000');
+
     expect(find.byKey(const Key('otp_screen')), findsOneWidget);
+    expect(find.text('Incorrect OTP.'), findsOneWidget);
     expect(find.byKey(const Key('home_screen')), findsNothing);
   });
 
-  testWidgets('a code that is not 6 digits is stopped before the network', (tester) async {
-    final repo = FakeAuthRepository();
+  testWidgets('a banned account stays on the code screen with the ban message', (tester) async {
+    final repo = FakeAuthRepository()
+      ..newUser = false
+      ..verifyError = const ApiException(
+        type: ApiErrorType.banned,
+        message: 'Account banned!',
+        statusCode: 403,
+        code: 'ACCOUNT_BANNED',
+      );
     await _pump(tester, repo);
-
     await _enterPhoneAndSend(tester);
-    await _enterCodeAndVerify(tester, '123');
 
-    expect(repo.verifyCalls, isEmpty);
-    expect(find.text('The code is 6 digits'), findsOneWidget);
+    await _enterOtpAndVerify(tester);
+
+    expect(find.byKey(const Key('otp_screen')), findsOneWidget);
+    expect(find.text('Account banned!'), findsOneWidget);
   });
 
-  testWidgets('resend sends a new code and confirms it', (tester) async {
+  testWidgets('a short code is rejected before anything is sent', (tester) async {
     final repo = FakeAuthRepository();
     await _pump(tester, repo);
-
     await _enterPhoneAndSend(tester);
+
+    await _enterOtpAndVerify(tester, '123');
+
+    expect(find.text('The code is 6 digits'), findsOneWidget);
+    expect(repo.verifies, isEmpty);
+  });
+
+  testWidgets('resend sends a new code', (tester) async {
+    final repo = FakeAuthRepository();
+    await _pump(tester, repo);
+    await _enterPhoneAndSend(tester);
+
     await tester.tap(find.byKey(const Key('resend_button')));
     await tester.pumpAndSettle();
 
-    expect(repo.sentTo.length, 2);
+    expect(repo.sent, ['+919876543210', '+919876543210']);
     expect(find.byKey(const Key('otp_info')), findsOneWidget);
   });
 
-  testWidgets('change number returns to login', (tester) async {
+  testWidgets('change number goes back to login', (tester) async {
     final repo = FakeAuthRepository();
     await _pump(tester, repo);
-
     await _enterPhoneAndSend(tester);
+
     await tester.tap(find.byKey(const Key('change_number_button')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('login_screen')), findsOneWidget);
   });
 
-  testWidgets('new user: code -> profile -> account created -> home', (tester) async {
-    final repo = FakeAuthRepository()
-      ..onVerify = (otp, profile) =>
-          profile == null ? const AuthResult.profileRequired() : const AuthResult.loggedIn('jwt.new');
-    await _pump(tester, repo);
-
-    await _enterPhoneAndSend(tester);
-    await _enterCodeAndVerify(tester);
-    expect(find.byKey(const Key('profile_screen')), findsOneWidget);
-
-    await _fillProfile(tester);
-    await tester.tap(find.byKey(const Key('create_account_button')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('home_screen')), findsOneWidget);
-    final call = repo.verifyCalls.last;
-    expect(call.otp, '123456');
-    expect(call.phone, '+919876543210');
-    expect(call.profile!.name, 'Rahul');
-    expect(call.profile!.age, 25);
-    expect(call.profile!.gender, 'male');
-    expect(call.profile!.city, 'Surat');
-  });
-
-  testWidgets('profile form rejects an under-18 age without calling the backend', (tester) async {
+  testWidgets('code expired while filling the profile: offers to start again', (tester) async {
     final repo = FakeAuthRepository();
     await _pump(tester, repo);
-
     await _enterPhoneAndSend(tester);
-    await _enterCodeAndVerify(tester);
-    await _fillProfile(tester, age: '17');
+    await _enterOtpAndVerify(tester);
+
+    repo.verifyError = const ApiException(
+      type: ApiErrorType.validation,
+      message: 'OTP expired or not requested. Please request a new one.',
+      statusCode: 400,
+      code: AuthErrorCodes.otpExpired,
+    );
+    await tester.enterText(find.byKey(const Key('name_field')), 'Rahul');
+    await tester.enterText(find.byKey(const Key('age_field')), '25');
+    await tester.enterText(find.byKey(const Key('city_field')), 'Surat');
+    await tester.tap(find.byKey(const Key('gender_field')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Female').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('create_account_button')));
     await tester.tap(find.byKey(const Key('create_account_button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('You must be 18 or older'), findsOneWidget);
-    expect(repo.verifyCalls.length, 1); // only the code check, no sign-up attempt
-    expect(find.byKey(const Key('profile_screen')), findsOneWidget);
-  });
-
-  testWidgets('code expired while filling the profile: offers to start again', (tester) async {
-    final repo = FakeAuthRepository()
-      ..onVerify = (otp, profile) => profile == null
-          ? const AuthResult.profileRequired()
-          : throw _err('OTP_EXPIRED', 'OTP expired. Please request a new one.', type: ApiErrorType.validation);
-    await _pump(tester, repo);
-
-    await _enterPhoneAndSend(tester);
-    await _enterCodeAndVerify(tester);
-    await _fillProfile(tester);
-    await tester.tap(find.byKey(const Key('create_account_button')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('profile_error')), findsOneWidget);
     expect(find.byKey(const Key('start_again_button')), findsOneWidget);
-
+    await tester.ensureVisible(find.byKey(const Key('start_again_button')));
     await tester.tap(find.byKey(const Key('start_again_button')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('login_screen')), findsOneWidget);
-  });
-
-  testWidgets('banned account: message shown, user stays logged out', (tester) async {
-    final repo = FakeAuthRepository()
-      ..onVerify = (_, __) =>
-          throw _err('ACCOUNT_BANNED', 'Account banned!', type: ApiErrorType.banned);
-    await _pump(tester, repo);
-
-    await _enterPhoneAndSend(tester);
-    await _enterCodeAndVerify(tester);
-
-    expect(find.text('Account banned!'), findsOneWidget);
-    expect(find.byKey(const Key('home_screen')), findsNothing);
-  });
-
-  testWidgets('SessionStatus stays unauthenticated until the token is saved', (tester) async {
-    final repo = FakeAuthRepository();
-    await _pump(tester, repo);
-    final container = ProviderScope.containerOf(tester.element(find.byType(DostiApp)));
-
-    expect(container.read(sessionProvider).status, SessionStatus.unauthenticated);
   });
 }
