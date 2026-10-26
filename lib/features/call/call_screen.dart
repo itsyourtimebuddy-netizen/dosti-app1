@@ -68,7 +68,10 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   @override
   Widget build(BuildContext context) {
     ref.listen<CallPhase>(callProvider.select((s) => s.phase), (_, next) {
-      if (next == CallPhase.idle) _leaveIfIdle();
+      // Wait for the rebuild below first: only then does PopScope allow leaving.
+      if (next == CallPhase.idle) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _leaveIfIdle());
+      }
     });
     final call = ref.watch(callProvider);
 
@@ -92,7 +95,8 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     }
 
     return PopScope(
-      canPop: false,
+      // Back is handled by hand while a search or call is on; once idle the screen may close.
+      canPop: call.phase == CallPhase.idle,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _onBack();
       },
