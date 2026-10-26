@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/auth_flow.dart';
+import '../../features/call/call_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/otp_screen.dart';
 import '../../features/auth/profile_screen.dart';
@@ -20,6 +21,7 @@ class AppRoutes {
   static const profile = '/profile';
   static const home = '/home';
   static const editProfile = '/edit-profile';
+  static const call = '/call';
 
   /// Screens a logged-out user may open.
   static const publicRoutes = <String>{login, otp, profile};
@@ -68,6 +70,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.otp, builder: (_, __) => const OtpScreen()),
       GoRoute(path: AppRoutes.profile, builder: (_, __) => const ProfileScreen()),
       GoRoute(path: AppRoutes.home, builder: (_, __) => const HomeScreen()),
+      GoRoute(path: AppRoutes.call, builder: (_, __) => const CallScreen()),
       GoRoute(path: AppRoutes.editProfile, builder: (_, __) => const EditProfileScreen()),
     ],
   );

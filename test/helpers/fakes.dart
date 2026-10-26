@@ -1,6 +1,12 @@
+import 'dart:async';
+
 import 'package:dosti_app/core/realtime/realtime_controller.dart';
 import 'package:dosti_app/core/realtime/realtime_transport.dart';
 import 'package:dosti_app/core/storage/token_store.dart';
+import 'package:dosti_app/features/call/call_controller.dart';
+import 'package:dosti_app/features/call/call_repository.dart';
+import 'package:dosti_app/features/call/mic_permission.dart';
+import 'package:dosti_app/features/call/voice_engine.dart';
 import 'package:dosti_app/features/profile/profile_repository.dart';
 import 'package:dosti_app/features/profile/user_models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -89,6 +95,119 @@ class FakeTransport implements RealtimeTransport {
 
   @override
   void disconnect() => disconnects++;
+
+  /// Everything the app emitted: ('start_match', null), ('cancel_match', null), ...
+  final emitted = <String>[];
+  bool connected = true;
+
+  @override
+  bool emit(String event, [Object? data]) {
+    if (!connected) return false;
+    emitted.add(event);
+    return true;
+  }
+}
+
+/// Voice channel double: records what the app asked for and lets a test play Agora events.
+class FakeVoiceEngine implements VoiceEngine {
+  final _controller = StreamController<VoiceEvent>.broadcast();
+  Object? joinError;
+  Map<String, Object?>? joinArgs;
+  int leaves = 0;
+  bool? muted;
+  bool? speaker;
+
+  @override
+  Stream<VoiceEvent> get events => _controller.stream;
+
+  @override
+  Future<void> join({
+    required String appId,
+    required String token,
+    required String channelId,
+    required int uid,
+  }) async {
+    if (joinError != null) throw joinError!;
+    joinArgs = {'appId': appId, 'token': token, 'channelId': channelId, 'uid': uid};
+  }
+
+  @override
+  Future<void> setMuted(bool value) async => muted = value;
+
+  @override
+  Future<void> setSpeaker(bool on) async => speaker = on;
+
+  @override
+  Future<void> leave() async => leaves++;
+
+  void emit(VoiceEventType type) => _controller.add(VoiceEvent(type));
+}
+
+/// Records the REST calls made around a call; errors can be scripted per call.
+class FakeCallRepository implements CallRepository {
+  final ends = <(String, int)>[];
+  final ratings = <(String, int)>[];
+  final reports = <(String, String, String)>[]; // reportedUserId, matchId, reason
+  final blocks = <String>[];
+  Object? endError;
+  Object? rateError;
+  Object? reportError;
+  Object? blockError;
+
+  @override
+  Future<void> endMatch({required String matchId, required int durationSeconds}) async {
+    if (endError != null) throw endError!;
+    ends.add((matchId, durationSeconds));
+  }
+
+  @override
+  Future<void> rate({required String matchId, required int stars}) async {
+    if (rateError != null) throw rateError!;
+    ratings.add((matchId, stars));
+  }
+
+  @override
+  Future<void> report({
+    required String reportedUserId,
+    required String matchId,
+    required String reason,
+    String? details,
+  }) async {
+    if (reportError != null) throw reportError!;
+    reports.add((reportedUserId, matchId, reason));
+  }
+
+  @override
+  Future<void> block(String userId) async {
+    if (blockError != null) throw blockError!;
+    blocks.add(userId);
+  }
+}
+
+class FakeMic implements MicPermissionGateway {
+  MicPermission result = MicPermission.granted;
+  int requests = 0;
+  int settingsOpened = 0;
+
+  @override
+  Future<MicPermission> request() async {
+    requests++;
+    return result;
+  }
+
+  @override
+  Future<bool> openSettings() async {
+    settingsOpened++;
+    return true;
+  }
+}
+
+/// A clock the test moves by hand, so "two minutes later" costs no real time.
+class FakeClock {
+  DateTime _now = DateTime(2026, 1, 1, 12);
+
+  DateTime now() => _now;
+  void advance(Duration d) => _now = _now.add(d);
 }
 
 /// Overrides every network edge, so widget tests never touch a real server or secure storage.
@@ -96,9 +215,19 @@ List<Override> homeOverrides({
   String? savedToken,
   FakeProfileRepository? profiles,
   FakeTransport? transport,
+  FakeVoiceEngine? voice,
+  FakeCallRepository? calls,
+  FakeMic? mic,
+  FakeClock? clock,
 }) =>
     [
       tokenStoreProvider.overrideWithValue(InMemoryTokenStore(savedToken)),
       profileRepositoryProvider.overrideWithValue(profiles ?? FakeProfileRepository()),
       realtimeTransportProvider.overrideWithValue(transport ?? FakeTransport()),
+      voiceEngineProvider.overrideWithValue(voice ?? FakeVoiceEngine()),
+      callRepositoryProvider.overrideWithValue(calls ?? FakeCallRepository()),
+      micPermissionProvider.overrideWithValue(mic ?? FakeMic()),
+      callTimingsProvider.overrideWithValue(
+        CallTimings(tick: const Duration(milliseconds: 5), clock: (clock ?? FakeClock()).now),
+      ),
     ];

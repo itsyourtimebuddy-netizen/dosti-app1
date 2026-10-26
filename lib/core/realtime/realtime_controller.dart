@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config/app_config.dart';
@@ -18,12 +20,24 @@ class RealtimeState {
       RealtimeState(status: status ?? this.status, onlineCount: onlineCount ?? this.onlineCount);
 }
 
+/// A server event that is not about connection state (match_found and friends).
+class RealtimeEvent {
+  const RealtimeEvent(this.name, this.data);
+
+  final String name;
+  final dynamic data;
+}
+
 final realtimeTransportProvider = Provider<RealtimeTransport>((ref) => SocketIoTransport());
 
 /// Owns the live connection while the user is inside the app. Auto-disposed with the home area,
 /// which disconnects the socket on logout. Socket.IO reconnects by itself after drops.
 class RealtimeController extends AutoDisposeNotifier<RealtimeState> {
   bool _alive = true;
+  final _events = StreamController<RealtimeEvent>.broadcast();
+
+  /// Server events for features built on top (matching, and later rooms and gifts).
+  Stream<RealtimeEvent> get events => _events.stream;
 
   @override
   RealtimeState build() {
@@ -32,8 +46,15 @@ class RealtimeController extends AutoDisposeNotifier<RealtimeState> {
     ref.onDispose(() {
       _alive = false;
       transport.disconnect();
+      _events.close();
     });
     return const RealtimeState();
+  }
+
+  /// Sends an event to the server. False when not connected, so the caller can tell the user.
+  bool emit(String event, [Object? data]) {
+    if (!_alive || state.status != RealtimeStatus.connected) return false;
+    return ref.read(realtimeTransportProvider).emit(event, data);
   }
 
   void _set(RealtimeState Function(RealtimeState) change) {
@@ -55,6 +76,9 @@ class RealtimeController extends AutoDisposeNotifier<RealtimeState> {
             onDisconnected: () => _set((s) => s.copyWith(status: RealtimeStatus.connecting)),
             onError: (_) => _set((s) => s.copyWith(status: RealtimeStatus.connecting)),
             onOnlineCount: (count) => _set((s) => s.copyWith(onlineCount: count)),
+            onEvent: (name, data) {
+              if (_alive && !_events.isClosed) _events.add(RealtimeEvent(name, data));
+            },
           ),
         );
   }
