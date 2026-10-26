@@ -66,7 +66,8 @@ class Harness {
   /// A bounded stand-in for pumpAndSettle: the searching and connecting screens show a spinner that
   /// animates forever, so "wait until nothing moves" would never finish.
   Future<void> settle() async {
-    for (var i = 0; i < 10; i++) {
+    // 1.2s of fake time: long enough for the slowest page transition (Android's fade-forwards is ~0.8s).
+    for (var i = 0; i < 24; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
   }
