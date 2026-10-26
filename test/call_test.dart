@@ -392,7 +392,7 @@ void main() {
       await h.close();
     });
 
-    testWidgets('the one-hour token running out ends the call politely', (tester) async {
+    testWidgets('when the voice token is about to run out the call gets a fresh one and goes on', (tester) async {
       final h = Harness(tester);
       await h.open();
       await h.reachCall();
@@ -400,7 +400,41 @@ void main() {
       h.voice.emit(VoiceEventType.tokenExpiring);
       await h.settle();
 
+      expect(h.calls.tokenFetches, 1);
+      expect(h.voice.renewedTokens, ['fresh.token']);
+      expect(h.call.phase, CallPhase.inCall);
+      expect(find.byKey(const Key('end_call_button')), findsOneWidget);
+      await h.close();
+    });
+
+    testWidgets('two expiry warnings in a row fetch only one token', (tester) async {
+      final h = Harness(tester);
+      await h.open();
+      await h.reachCall();
+
+      h.voice.emit(VoiceEventType.tokenExpiring);
+      h.voice.emit(VoiceEventType.tokenExpiring);
+      await h.settle();
+
+      expect(h.calls.tokenFetches, 1);
+      await h.close();
+    });
+
+    testWidgets('if the server refuses a new token the call ends politely', (tester) async {
+      final h = Harness(tester)
+        ..calls.tokenError = const ApiException(
+          type: ApiErrorType.conflict,
+          message: 'This call has reached the maximum length.',
+          statusCode: 409,
+        );
+      await h.open();
+      await h.reachCall();
+
+      h.voice.emit(VoiceEventType.tokenExpiring);
+      await h.settle();
+
       expect(find.text('Call time limit reached'), findsOneWidget);
+      expect(h.voice.renewedTokens, isEmpty);
       await h.close();
     });
 

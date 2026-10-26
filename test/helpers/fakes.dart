@@ -116,6 +116,10 @@ class FakeVoiceEngine implements VoiceEngine {
   int leaves = 0;
   bool? muted;
   bool? speaker;
+  final renewedTokens = <String>[];
+
+  @override
+  Future<void> renewToken(String token) async => renewedTokens.add(token);
 
   @override
   Stream<VoiceEvent> get events => _controller.stream;
@@ -150,6 +154,8 @@ class FakeCallRepository implements CallRepository {
   final reports = <(String, String, String)>[]; // reportedUserId, matchId, reason
   final blocks = <String>[];
   Object? endError;
+  Object? tokenError;
+  int tokenFetches = 0;
   Object? rateError;
   Object? reportError;
   Object? blockError;
@@ -158,6 +164,13 @@ class FakeCallRepository implements CallRepository {
   Future<void> endMatch({required String matchId, required int durationSeconds}) async {
     if (endError != null) throw endError!;
     ends.add((matchId, durationSeconds));
+  }
+
+  @override
+  Future<String> fetchCallToken(String matchId) async {
+    tokenFetches++;
+    if (tokenError != null) throw tokenError!;
+    return 'fresh.token';
   }
 
   @override

@@ -15,7 +15,7 @@ enum VoiceEventType {
   /// The connection could not be recovered.
   connectionFailed,
 
-  /// The server-issued token is about to run out (calls are capped at about an hour).
+  /// The token is about to run out: ask the server for a new one.
   tokenExpiring,
   error,
 }
@@ -38,6 +38,9 @@ abstract class VoiceEngine {
     required String channelId,
     required int uid,
   });
+
+  /// Hands the running call a fresh token (the first one lasts about an hour).
+  Future<void> renewToken(String token);
 
   Future<void> setMuted(bool muted);
   Future<void> setSpeaker(bool on);

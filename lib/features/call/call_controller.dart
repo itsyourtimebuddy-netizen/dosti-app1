@@ -202,10 +202,30 @@ class CallController extends Notifier<CallState> {
         _finish(CallEndReason.connectionLost);
         break;
       case VoiceEventType.tokenExpiring:
-        _finish(CallEndReason.timeLimit);
+        _renewToken();
         break;
       case VoiceEventType.error:
         break; // Agora reports many recoverable errors; real failures arrive as connection events
+    }
+  }
+
+  bool _renewing = false;
+
+  /// The voice token lasts about an hour. Shortly before it runs out the engine warns us, and we
+  /// fetch a new one so the call simply continues. Only if that fails does the call end.
+  Future<void> _renewToken() async {
+    final match = state.match;
+    if (_renewing || match == null) return;
+    final generation = _generation;
+    _renewing = true;
+    try {
+      final token = await ref.read(callRepositoryProvider).fetchCallToken(match.matchId);
+      if (generation != _generation || state.phase == CallPhase.ended) return;
+      await ref.read(voiceEngineProvider).renewToken(token);
+    } catch (_) {
+      if (generation == _generation) await _finish(CallEndReason.timeLimit);
+    } finally {
+      _renewing = false;
     }
   }
 

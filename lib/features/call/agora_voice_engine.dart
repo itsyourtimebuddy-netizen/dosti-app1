@@ -67,6 +67,9 @@ class AgoraVoiceEngine implements VoiceEngine {
   }
 
   @override
+  Future<void> renewToken(String token) async => _engine?.renewToken(token);
+
+  @override
   Future<void> setMuted(bool muted) async => _engine?.muteLocalAudioStream(muted);
 
   @override
