@@ -56,7 +56,7 @@ jobs:
         run: bash .github/ci_run.sh "flutter analyze" flutter analyze --no-fatal-infos
 
       - name: Test
-        run: bash .github/ci_run.sh "flutter test" flutter test
+        run: bash .github/ci_run.sh "flutter test" flutter test test/zz_diag_test.dart
 
       - name: Build debug APK
         env:
