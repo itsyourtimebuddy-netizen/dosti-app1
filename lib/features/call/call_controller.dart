@@ -85,7 +85,7 @@ class CallController extends Notifier<CallState> {
 
     final realtime = ref.read(realtimeProvider.notifier);
     _eventsSub = realtime.events.listen(_onRealtimeEvent);
-    _statusSub = ref.listenManual<RealtimeState>(realtimeProvider, (_, next) {
+    _statusSub = ref.container.listen<RealtimeState>(realtimeProvider, (_, next) {
       if (state.phase == CallPhase.searching && next.status != RealtimeStatus.connected) {
         _abortSearch('Connection lost. Please try again.', tellServer: false);
       }
