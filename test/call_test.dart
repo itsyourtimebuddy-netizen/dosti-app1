@@ -63,7 +63,13 @@ class Harness {
 
   CallState get call => container.read(callProvider);
 
-  Future<void> settle() => tester.pumpAndSettle();
+  /// A bounded stand-in for pumpAndSettle: the searching and connecting screens show a spinner that
+  /// animates forever, so "wait until nothing moves" would never finish.
+  Future<void> settle() async {
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+  }
 
   Future<void> tapStart() async {
     await tester.tap(find.byKey(const Key('start_match_button')));
